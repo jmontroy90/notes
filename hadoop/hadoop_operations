@@ -1,0 +1,55 @@
+Hadoop Operations::
+
+** CHAPTER 2 **
+
+	** Goals and Motivations **
+	* Relax POSIX requirements - character encodings? What is this?
+	* Optimize for large streaming reads - bigger block sizes, better concurrency? What else?
+	* MapReduce attempts to perform computation where the data blocks actually are, instead of incurring network costs
+
+	** Design **
+	* Files are stored in blocks with metadata, per normal EXT design
+	* Difference: normal filesystems are implemented as kernal modules, whereas HDFS is implemented in user space
+		* Benefit: safer, more flexible
+		* Downside: need an application to interface
+	* MUCH larger block sizes: default 64MB, COULD go as high as 1GB
+	* Replication: default 3 block writes, and metadata stores / tracks failures to keep redundancy consistent
+		 * Replica = copy of HDFS block
+
+	 ** Daemons **
+	 * Namenode, secondary namenode (NOT A BACKUP OF NAMENODE!), and datanodes
+	 * Namenode - in-memory metadata of blocks on datanodes
+	 * Datanode - stores data, commodity hardware, no RAID
+	 	* For Hadoop-appropriate workloads, HDFS > RAID
+ 	* Datanodes send heartbeat to namenode for health checks (what is this, just a port scan?)
+ 	* Also send block reports, which are listings of all blocks on a given datanode - ONE per hour
+
+ 	** Reading and Writing Data **
+ 	* A client requests, and the namenode responds with a list of datanodes with the requested blocks, sorted by distance (rack topology)
+ 	* Client takes block IDs and datanode hostnames and retrieves data appropriately
+ 	* Problems: what if a node is dead? What if your information is outdated by the time your retrieve?
+ 	* Writes: first create metadata, then break data into packets (NOT TCP / BLOCKS) which are queued
+ 		* Separate threads reads from queue, and writes to datanodes in a replication pipeline (d1 -> open to d2 -> open to d3)
+ 		* Client keeps of track of acks from datanodes on successful persist
+
+	** Managing filesystem metadata **
+	* fsimage + edits
+		* fsimage = complete snapshot of metadata
+		* edits = write-ahead log (WAL) for differential from fsimage
+	* Like sql server, edits is sequential and needs to be periodically applied to fsimage; can also be rolled
+	* What if resources are unavailable to apply edits changes to fsimage? enter: secondary namenode!
+		* roll to edits.new on namenode -> send fsimage and edits to secondary -> replay edits to fsimage -> send new fsimage back to primary
+		* This occurs by default every hour!
+	
+	** Namenode High Availability **
+	* Shared edits file (via NFS) that constantly replays changes to the backup primary namenode
+	* Must ensure no split brain - only ONE primary at any time (RPC call? STONITH?)
+	* Backup usually is also the secondary namenode, but it can be ready to become primary with shared file storage
+
+	** Namenode Federation **
+	* Metadata is stored in memory for retrieval - what if you run out of memory? Scale up? No, out.
+	* Namespace federation splits metadata across multiple namenodes
+	* Each datanode can store blocks for multiple namenodes, ie heartbeat to all namenodes
+	* ViewFS allows clients to interact only with a namespace, ie higher level abstraction
+
+	

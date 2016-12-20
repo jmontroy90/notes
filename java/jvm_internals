@@ -1,0 +1,43 @@
+Understanding JVM Internals
+http://www.cubrid.org/blog/dev-platform/understanding-jvm-internals/
+
+	* Java bytecode runs in the Java Runtime Environment, of which the Java Virtual Machine (JVM) is a primary component
+	* JRE = Java API + JVM
+	* JVM is:
+		** Stack-based (x86 architecture is register-based -- difference?) *** RESEARCH ***
+		** Symbolic reference for all but primitive types (direct memory reference vs symbolic? read up!)
+		** explicit object creation, automatically destroyed by the garbage collector
+		** other languages: primitive types depend on architecture. JVM GUARANTEES primitive types for cross-compatibility, so an int is an int
+		** Uses network byte order - big endian. *** RESEARCH ***
+	* Bytecode has no platform-dependent instructions -- how? *** RESEARCH ***
+	* Bytecode instruction = Opcode + Operand
+		** invokeinterface, invokespecial (initializers, privates, superclasses), invokestatic, invokevirtual (instance methods)
+	* Types in bytecode are one character (int = I, double = D) except for references to class objects which are L<classname>
+	* Bytecode runs through instructions as a stak, so things aren't cycled through registers
+	* Instead you directly reference the index of a constant in the constant pool (since the JVM manages its memory) and it works off that
+		* x86 references memory locations directly, on the contrary
+	* Other details not crazy important for now.
+
+	** JVM **
+	* .java -> .class (via javac) -> Class Loader -> Runtime Data Areas / Execution Engine
+	* Class Loader is dynamic - creates class loaders for each class at run time as needed, not at compile time
+	* There's a hierarchy of class loaders depending on what's loading
+	* Classes are checked of they've been previously loaded by a parent clas, or the class cache
+
+	** JVM Data Areas **
+	* PC Register, JVM Stack, Native Method Stack (created for each thread) + Heap, Method Area, Runtime Constant Pool (shared among threads)
+	* PC Register - instruction being executed now
+	* JVM Stack - pushes and pops stack frames (per normal x86 architecture too?)
+	* Native method stack - runs native code written in C / C++ (run via the Java Native Interface [JNI])
+	* Runtime constant pool - contains all references for methods and fields. Crucial component. *** Research ***
+	* Heap - stores instances and objects. Frequent target for optimization and performance. Heavily garbage-collected.
+
+	** Execution Engine **
+	* Java bytecode is NOT machine code! Must be either interpreted or compiled (Just-In-Time compiler)
+	* Interpreted: Interprets bytecode instructions one by one. Slower than native code, obviously.
+	* JIT only compiles when a certain frequency threshold of method usage is met, such that the compilation penalty is only occured when needed
+	* Most speed optimizations must be made to the execution engine (share compiled code between JVMs, global optimizers, etc.)
+	* This is silly. The JVM is doing way too much work.
+
+Modern Data Architecture
+https://0x0fff.com/wp-content/uploads/2015/11/Modern-Data-Architecture-JD-Kiev-v05.pdf
