@@ -1,0 +1,46 @@
+Chapter 2: Process Management and Scheduling
+
+ * Upon context switch, ensure execution environment is exactly preserved for a return thread
+ 	* Register contents, virtual address space
+
+ 2.1 Process Priorities
+
+ 	* Several kinds of processes:
+ 		1) Hard real-time processes: certain time frames for tasks (latency + processing) MUST NOT be exceeded. Linux doesn't have these.
+ 			* Decreasing kernal latency is hard, but things like the preemtible kernal mechanism, real-time mutexes, and CFS help
+		2) Soft real-time processes: a CD write (spinning CD + write head) requires as little latency as possible, but the stringency is relaxed.
+		3) Normal processes: no limitations. Interruptible.
+	* Remember complexities: what algorithm? What kind of process? With what kind of priority?
+		
+	2.2 Process Life Cycle
+
+		* Three states: running (on CPU), waiting (ready, but no CPU time), and sleeping (waiting on a resource/event)
+		* Zombie processes: if a process is killed, but the parent process hasn't issued a wait4 system call
+
+	2.2.1 Preemptive Multitasking
+		
+		* Normal processes can always be interrupted
+		* System calls can be suspended by interrupts
+
+	2.3 Process Representation
+
+		* task_struct in sched.h - lots of fields containing info on running threads
+		* resource limits exists - check /proc/self/limits for more
+
+	2.3.1 Process Types
+
+		* fork and exec - fork means new process is INDEPENDENT of old process. copy-on-write ensures init speed
+		* clone - some resources ACTUALLY shared between PPID and PID (can specify which!)
+			** clone is involved in implementing threads (but not by itself)
+
+	2.3.3 Process Identification Numbers
+
+		* pid -> tgid (thread group id)
+		* group_leader of all cloned threads points to task_struct of group leader
+		* pgrp is a process group meant for coordinating across multiple threads in a process
+
+		** From here, pid allocation is just too much detail. Make one of these a case study or something for a morning.
+
+	2.4 Process Management System Calls
+
+		* 
