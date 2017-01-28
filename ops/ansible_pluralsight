@@ -1,0 +1,38 @@
+ANSIBLE:
+
+Introduction to Ansible:
+
+	* Provision thousands of VMs simultaneously
+	* Includes:
+		1) Change management
+		2) Provision
+		3) Automation
+		4) Provisioning
+	* Change Management:
+		* Why was a system changed? Mark it, control it, roll it back / forward appropriately.
+		* Idempotence - multiple applies have the same result as a single apply
+	* Provisioning - Send instructions to push system from one state to a new state (node -> email server)
+	* Automation + Orchestration: DAG-oriented automation that handles dependencies and configuration
+	* Benefits: no agents, databases, residual software, nothing. Just a control system - Ansible is clean!
+	* YAML - YAML Ain't a Markup Language
+	* Uses SSH by default, root / sudo, encrypted vault, no need for Private Key Infrastructure (PKI)
+	* RESTful calls, shell commands, scripts - all do-able in Ansible!
+	* Ansible Galaxy - like DockerHub!
+
+Architecture and Process Flow:
+
+	* Plays and playbooks...woohoo.
+	* Ansible Control Server is Python-based (2.6+), must sit on Unix-type OS
+	* Ansible Client needs simplejson, Python 2.5+
+		* Windows is an option, you just need Remote PowerShell
+	* Inventory - Text file that defines your hosts
+	* Modules - programmed unit of work to be done (command center)
+	* Playbooks - have plays set to run tasks (using modules) on certain hosts
+		* Is an ordered thing!
+	* Ansible Config - high-level Control Server config (concurrency, versioning)
+	* Different kinds of variables:
+		* Host variables - defined in Inventory per host or group (environmental variables to be shipped to the hosts?)
+		* Facts - data describing the hosts (CPU, disk, etc)
+		* Dynamic variables - created at runtime to do scripting, like any sort of variable
+	* 
+

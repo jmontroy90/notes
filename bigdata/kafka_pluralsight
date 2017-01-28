@@ -1,0 +1,31 @@
+Kafka (PluralSight):
+
+    * Scalable, fault-tolerant messaging system (message bus)
+    * Traditional messaging queues requires fast consumption, isn't fault-tolerant, and can struggle because of large messages
+    * Keep systems loosely-coupled and flexible on consumption / production patterns
+
+    ** KAFKA ARCHITECTURE **
+
+    * Publish / Subscribe system (pub-sub) -> Producers / Consumers (all just APIs)
+    * Messages produced by producers are sent to topics (append-only logs horizontally scaled)
+    * Topics are stored in brokers (a service on a box), and multiple brokers (on one or multiple machines) form a cluster
+    * Apache ZooKeeper is central to cluster coordination!
+    * Kafka brokers communicate with each other via a controller! 
+    * Controllers need quorum - elect a leader, get workers, establish quorum, specify replication factor for persistance
+    * Zookeeper - config, heartbeats, worker node membership (service discovery?)
+    * So Kafka = message broekr cluster + ZooKeeper, basically
+
+    ** TOPICS, BROKERS, PARTITIONS **
+
+    * Kafka is event sourcing - each topic is ordered, append-only, and read-only (which helps both reasoning, consistency, and [oddly] performance)
+    * Kafka Consumers use offsets THAT THEY INDIVIDUALLY STORE PER TOPIC to track how far into a topic's message queue they are
+    * Messages in a topic are retained per the retention policy - default, one week
+    * Every message has a timestamp, UID, and payload
+    * Kakfa stores data per topic in a specified log directory (DIFFERENT FROM PROCESS LOGS DUMBASS): has .index, .log, .timeindex (all of them binary)
+    * Kafka is a distributed commit log
+    * Kafka partitions are (logically) different commit logs handling the same topic, and (physically) literally just a folder with the log files above per broker
+    * Each broker (or more than one) handles a partition - metadata is handled by ZooKeeper
+    * Fault tolerance is achieved through replication factors, where a leader (ie broker that handles a topic partition) coordinates and replicates with N other brokers
+        ** So if the leader goes down, other brokers can step in - you have an unhealthy cluster, but consumers and producers can merrily chug along
+    * Single-node multi-broker - server-N.properties, then start a server with each server-N.properties file
+    * Once a leader broker goes down, a new leader is elected, the number of in-sync replicas (ISRs) go down (unless there's another broker available? ZK?)
