@@ -1,0 +1,32 @@
+Hive Design and Architecture
+(https://cwiki.apache.org/confluence/display/Hive/Design#Design-HiveArchitecture)
+
+	** Overview **
+	* UI submits query to ODBC/JDBC-like driver, which maps to implemented interfaces and whatnot in the usual fashion
+	* UI passes to compiler, compiler does semantic analysis on query + metastore information to generate an execution plan
+		* Metadata allows for typechecking and partition pruning based on predicates
+	* Generated execution plan is a DAG of MapReduce jobs, metadata operations, and HDFS operations
+	* Metadata needed for which serializers / deserializers are used for HDFS operations
+	* Each MapReduce job writes intermediate data to disk in temp files, where it is then picked up by the next MapReduce job in the DAG
+
+	** Hive Data Model **
+	* Remember: Hive-managed tables are in warehouse, external tables are laid over existing files in HDFS
+	* Partitions allow for pruning based on simple filesystem navigation
+	* Buckets are weird and have to do with SAMPLE tables?
+	* Types are basically normal primitives plus some complex types like maps and structs. 
+		* You want your own type - implement an object inspector!
+
+	** Metastore **
+	* SerDe, partitioning, and DDL information - all in metastore, allowing for data abstraction and data discovery
+	* Can be database- or file-backed, can also be remote or embedded
+		* Remote database is not scalable, but has a Thrift interface that allows for cross-platform communication, AND is now queriable!
+	* Database is implemented with ORM technology called DataNucleus
+
+	** HiveQL, Compiler **
+	* HiveQL allows for embedded MapReduce scripts in addition to SQL variant (scripts are stdin > stdout)
+	* Compiler works as follows:
+		** Parser - transform query string into parse tree representation
+		** Semantic Analyser - now an internal query representation. Column names verified, wildcards expanded, types verified.
+		** Logical Plan Generator - converts internal query representation into tree of operatores; some standard "filter", "join", some Hive-specific (map-side reduce, multi-join). Each operator is a descriptor.
+		** Query Plan Generator - converts operator tree recursively into DAG of MapReduce jobs; these jobs get serialized and written to disk to be read by Hadoop.
+		

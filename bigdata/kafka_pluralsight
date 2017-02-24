@@ -29,3 +29,42 @@ Kafka (PluralSight):
         ** So if the leader goes down, other brokers can step in - you have an unhealthy cluster, but consumers and producers can merrily chug along
     * Single-node multi-broker - server-N.properties, then start a server with each server-N.properties file
     * Once a leader broker goes down, a new leader is elected, the number of in-sync replicas (ISRs) go down (unless there's another broker available? ZK?)
+
+    ** KAFKA PRODUCER INTERNALS **
+
+    * Broker acknowledgement: 0 = fire and forget, 1 = just leader acknowledges, 2 = quorum needed
+    * Ordering not preserved across partitions, but even within partitions, retry logic can cause ordering errors:
+        * M1 fails, and before retry.backoff.ms for M1 expires, M2 comes in and is successfully written! So now M1 and M2 are out of order.
+        * max.in.flight.request.per.connection can be set to make sure ordering is preserved, but at SUCH a cost to throughput. Nope.
+    * Kafka Producers make use of serializers (StringSerializer is default in shell scripts)
+    * RecordAccumulator and RecordBuffer classes ensure that messages are sent to Kafka optimally - think block size vs throughput, and ensuring good use of pagecache + buffers
+        * Each batch has a max batch.size, a max buffer.memory (tethered to JVM heap?)
+
+    ** KAFKA CONSUMER INTERNALS **
+
+    * Java API subscribe - not incremental. Maintain topic lists in a separate structure, and then subscribe all at once.
+    * subscribe - topic; assign - partitions (CROSS-TOPIC!)
+    * subscribe will manage additional partitions added to a topic and will pull from the new partitions automatically
+    * The Consumer Network Client is the front-end for a consumer interacting with the cluster.
+        * The fetcher coordinates metadata retrieved by heartbeats with the actions of the Consumer Network Client
+        * The SubscriptionState and ConsumerCoordinator objects contain most of the data needed to handle dynamic partitioning, heartbeats, network blips, whatever
+    * The fetcher retrieves objects as buffers in memory, deserializes, processes further
+    * The consumer poll() method is SINGLE-THREADED!! How to scale?
+    * A consumer will track one offset per topic partition
+    * A consumer will start from the last committed offset and track its current position
+    * The difference between the last committed offset and the current position is the UNCOMMITTED OFFSET - how does Kafka "commit" something?
+    * Kafka has no way of knowing whether a consumer's processing logic is finished or not (nor should it!), so it will auto-commit after a given interval in ms
+        * This makes your system "eventually consistent" which can be obviously dangerous depending on your application!
+    * WHERE ARE THE OFFSETS STORED -- IN A KAFKA TOPIC IN THE CLUSTER! 
+        * "__consumer_offsets"
+        * So consumers are secretly producers as well!
+    * Offset committing - automatic vs manual! Manual is advanced - commitSync() and commitAsync()
+    * commitAsync requires a callback function, which can obviously get messy. If you don't handle via callbacks, it'll be worse because double-commits? Duplication?
+    * Scale consumers into...Consumer Groups! Coordinates via an elected leader called a GroupCoordinator, standard semantics for rebalancing events, commits can cause problems
+    * Lots of good configs specify min/max bytes per message, good for throttling, data profiling
+
+    ** KAFKA ECOSYSTEM AND FUTURE **
+    * Data governance and evolution is still always an issue
+    * Governance -- Kafka Schema Registry (made by Confluent)
+        * Register and version Avro schema
+        
