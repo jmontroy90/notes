@@ -1,0 +1,58 @@
+Billions of Messages a Day - Yelp's Real-time Data Pipeline
+(https://engineeringblog.yelp.com/2016/07/billions-of-messages-a-day-yelps-real-time-data-pipeline.html)
+
+	* Connecting services to each other via RESTful HTTP connections doesn't scale
+		* 150 services = (150 * 150) - 150 connections = 22,350 individual connections! Hell no.
+	* What is the N+1 query problem as related to services?
+		* If you issue N queries for each N ids (SELECT * FROM table WHERE id = N_1, and then same with N_2), it's overhead and latency
+		* Batch! SELECT * FROM table WHERE id IN (N_1, N_2, N_3...)
+	* People resort to Bulk Data APIs, but those can have different functionality across teams
+		* Pagination is a classic problem point
+	* Use Kafka! Log compaction = the history tables at Ladders
+		* if you replay a topic from the beginning, you're guaranteed the latest state of the database!
+		* This is clutch - any new consumer can get up and running quickly.
+	* Use Avro! Space-efficient binary serialization that supports schema evolution. JSON is too brittle.
+	* If you can build a schematizer that registers and evolves schema, and can then decode messages at runtime, boom!
+	* So a final pipeline will ingest to Kafka from DBs, CSVs, GA, whatever, into Kafka, then from Kafka into transformers (Spark, Storm), then to targets like MySQL, Cassandra, etc.
+	* Kafka + Schematizer - schema registration is idempotent, schema is immutable
+	* The Schematizer is great - producers MUST communicate schema changes and descriptions to the Schematizer before publishing, otherwise their change will fail validation! 
+	* Changes are published to Watson, which is an application that stores and presents docs on schema for consumption and querying.
+
+	TAKEAWAYS: Avro + immutability + idempotent schema publishing. Make docs mandatory. Provide tools for evolution notification.
+
+Streaming MySQL tables in real-time to Kafka
+(https://engineeringblog.yelp.com/2016/08/streaming-mysql-tables-in-real-time-to-kafka.html)
+
+	* Change data capture and publish systems - does something exist for SQL Server? Can we leverage transaction logs + JDBC maybe?
+	* MySQL replication - two threads:
+		* IO thread - reads binary logs from master to replica
+		* SQL thread - replays DB changes from binary logs once they're replicated over via IO thread
+	* MySQL - statement-based replication (SBR) vs row-based replication
+		* SBR persists original statement, but what if statement is non-deterministics? AUTO-INCREMENT, RAND(), NOW()...
+		* So we use row-based, which preserves actual outputs of statements and avoids statement nondeterminism
+	* Yelp's MySQLStreamer tails the binlogs for DML (insert, update, delete) and replicates that to Kafka
+		* INSERT publishes both before and after row - easier diffs, no state on services (how do you tell when it changes without that?)
+	* MySQL transaction writing is inherently serial, so distribution is tough. 
+		*  You can horizontally scale, but maybe only by MySQL database / function, not like multiple streamers for one table.
+	* Kafka-side - high min.isr, ACKs from all replicas...highly fault-tolerant and max notification
+	* For bootstrapping old MySQL tables, they use a MySQL black hole table - like /dev/null, but binlogs still get written to!
+		* Avoid actual redundancy of data while still getting binlogs
+
+More Than Just a Schema Store
+(https://engineeringblog.yelp.com/2016/08/more-than-just-a-schema-store.html)
+
+	* Kafka Connect / Schema Registry works well, but didn't exist when Yelp tackled this problem, so they have Schematizer!
+	* "To reduce the message size, rather than embedding the entire schema into the message, the message only contains a schema ID."
+		* This is nice. Redundant schema in messages is the worst, and JSON is particularly guilty of this.
+	* Compatible / incompatible schema evolutions follow Avro's rules - big benefit of Avro!
+	* If it's incompatible, it's a new Kafka topic within the same namespace and source of the original schema.
+	* Schema migration plans between two topics of the same source have to be implemented per consumer.
+		* "How do you evolve incompatible schema for RedShift vs MSSQL vs MySQL, etc?"
+	* Schematizer also keeps track of producers and consumers, frequency of messaging, etc. 
+		* People must provide this on integration! Then we can export back to Kafka as a topic for Splunk, whatever else
+	* No hard-coded topics - just provide schema, and Schematizer will say, "oh, you mean this topic."
+		* Same with consumers!
+	* Watson - documentation. STRONGLY COUPLE SCHEMA CHANGES TO BUSINESS DOCUMENTATION! THIS IS NOT OPTIONAL!
+		* This allows you to decouple your team functionality - infrastructure engineers vs BI consumers
+	* Evolution has to be: Avro-evolution compatible, same personal information needs, same primary key, etc.
+		* If these checks fail, it's a new topic for the same source

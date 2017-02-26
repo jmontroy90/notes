@@ -1,0 +1,125 @@
+What Every Programmer Should Know About Memory
+
+	2.0 Commodity Hardware Today
+	* One socket can have a quad-core CPU -> 4 sockets with a quad-core each = 16 physical cores
+	* All chipsets have a Northbridge and a Southbridge; 
+		* all CPUs and all RAM is connected via bus to the Northbridge
+		* Southbridge connects to Northbridge and devices like SATA, PCI-E, USB
+	* You can break through bottlenecks in Northbridge <-> RAM bus bandwidth by adding separate memory controllers for each RAM card
+	* NUMA nodes are good (each core has its own dedicated memory), but cross-node communication incurs a NUMA factor penalty
+
+
+	2.1 RAM Types
+	* Two types: static (SRAM) and dynamic (DRAM)
+	* static much faster, but more expensive
+	* Static: 
+		* requires constant power
+		* six transistors to one cell with one state - just generally more complex with more "real estate"
+		* state is immediately available - no refresh cycles
+	* Dynamic:
+		* Based off capacitance for state, which means lots of problems!
+		* Every read / write will slightly discharge capacitance, ie "leakage" - DRAM cells must be refreshed!
+		* Charging / discharging is NOT instantaneous, which means the sense amplifier needs to estimate when (dis)charging is finished (physics!)
+		* Advantage is real estate - data line, access line, one transistor, and capacitor (10^9 per chip!)
+	* Static would be great, but the costs are too high, so for commodity hardware were kinda stuck with dynamic.
+
+	2.1.3 DRAM access
+	* processor virtual address 
+		-> physical address 
+			-> memory controller selects RAM chip from physical address 
+				-> parts of physical address are used as address line to choose the proper cell on chip
+	* No way can we address every cell with an address line individually, so we multiplex (function: N -> 2^N address lines)
+	* Every address line takes a pin on a RAM chip, so we try to reduce the total number of address lines
+		* If a memory controller handles 8 RAM modules, each with 30 address lines, boom 240 pins just for addressing. Uh-oh.
+		* So - DRAM chips demultiplex themselves. Two address lines. I don't totally follow this part.
+	* Cell selection is demultiplexed in a row-address selector (RAS) and a column-address selector (CAS); just a grid.
+	* For writes, you put data on data bus, demultiplex, write, BUT that means wait for capacitance to discharge or charge!
+		* FURTHER: how do you estimate when you can write again to that cell? Read from it?
+	* SRAM is used in CPU caches! Makes sense. How's it perform?
+
+	2.2 DRAM Access Technical Details
+	* Concentrate on Synchronous DRAM (SDRAM) and Double Data Rate DRAM (DDR) - these are the big players
+	* SDRAM works with the memory controller's clock, the frequency of which controls the speed of the Front Side Bus (SDRAM interface)
+		* Typically 800MHz, 1066MHz, and you can "quad-pump" data, ie data transfers 4x a cycle, for "effective" higher cycle speeds
+	* EACH SDRAM TRANSFER IS 8 BYTES, SO YOUR CEILING TRANSFER RATE IS ~6.4GB/s FOR A QUAD-PUMPED 200MHz BUS! 800MHz * 8 bytes.
+	* For reading, you need to wait for CAS and RAS latency and once those are addressed you can transfer!
+	* This is reliant on FSB clock because signals are read "on the rising edge of the clock" - just remember sawtooth-pattern cycles.
+	* Once RAS/CAS is resolved and those lines are "lowered", we don't want to incur that cost for EVERY word, so we can leave it open to write on one row/column for multiple words / many cells per word at the memory controller's discrection (algorithms!)
+		* Amortizing costs is everywhere
+	* First-gen SDRAM spits on word per cycle - DDR does two words per cycle! Cool beans. Not hot beans.
+
+	2.2.2 Precharge and Activation
+	* Main point - cycles are valuable, and if you spend all your cycles RAS'ing and CAS'ing, your "effective" FSB throughput gets sliced hardcore
+		* His example - only 2 of 7 cycles are used for data transfer, soooo your 6.4GB/s is now roughly 1.8GB/s!
+	* Also, discharging and precharging a new CAS is costly!
+	* You got a notation for how these constants operate (each number in Hz)!
+		w-x-y-z-T (ie, 2-3-2-8-T1) 
+		[CAS Latency (CL)] - [RAS-to-CAS delay (tRCD)] - [RAS Precharge (tRP)] - [Active to Precharge delay (tRAS)] - [Command Rate]
+	* These + FSB and SDRAM module speed are the main performance indicators of memory performance on a machine
+	* CAN tweak these in BIOS (overclocking) but like, good luck.
+
+	2.2.3 Recharging
+	* Remember, a DRAM cell must be refreshed due to leakage -- DURING A REFRESH, NO ACCESS IS POSSIBLE!!
+		* This can also affect performance dramatically depending on how it's handled!
+	* Can't say it better than this:
+		* "Each DRAM cell must be refreshed every 64ms according to the JEDEC (Joint Electron Device Engineering Council) specification. If a DRAM array has 8,192 rows this means the memory controller has to issue a refresh command on average every 7.8125μs (refresh commands can be queued so in practice the maximum interval between two requests can be higher)."
+	* How long a refresh takes depends on the RC cycle based on the physics law
+
+	2.2.4 Memory Types
+	* Driving up the frequency of the RAM modules / cells themselves is expensive (power reqs.), but we can make some optimizations
+	* Address 2 - 8 cells with the same address, buffer their contents together, and then up the frequency on the FSB instead of the SDRAM itself
+	* This is what DDR1 and DDR@ essentially do - DDR3 adds optimizations for lowering voltage costs
+	* FB-DRAM uses serialization to get around scalability issues of DDR RAM - gotta re-read this
+	* Even with the fastest memory, a wasted memory cycle probably scales to (for example) 11 wasted CPU cycles, so being efficient is key
+	* Network, video, and storage components will pipe into memory via DMA too, which can hog bandwidth and waste even more CPU cycles.
+		* Good reason to get dedicated VRAM! Average access bandwidth can be like 94MB/s, so oof.
+
+	3 CPU Caches
+	* Caches can use SRAM! Big speed boost.
+	* Use algorithms to fetch / pre-fetch memory into cache based on concept of temporal / spatial locality - data will be re-used!
+	* Ratio can be 10:1 - 4GB main memory, 4MB cache. If all fits in cache, boom!
+
+	3.1 CPU Caches in the Big Picture
+	* Multiple levels of cache - just increasing L1 is not viable
+	* Separate out data and instruction caches - this information will basically NEVER overlap, so you're good!
+		* Intel did it in 1993, and they've stuck to it
+	* Processors vs cores - important! Cores share higher-level caches (L2, L3), but each have their own L1 caches. All are contained in a processor.
+	* Threads are important too. Come back.
+
+	3.2 Cache Operation at High Level
+	* Some memory regions can't be cached, but this an OS-level thing; some instructions can bypass cache and this IS a programmer thing
+	* Each word in cache is TAGGED with the address in main memory
+		* If you have an instruction to R/W a address in main memory, can search cache by tagged address first!
+	* Entries in cache are stored in cache "lines" - multiple words tagged once, hoping for the best with spatial / temporal locality
+		* Usual cache line size is 64 bytes - 8 transfers for an 8-byte-wide memory bus
+	* Broken into offset, cache set, and tag
+	* Cache lines can be marked as "dirty" - written to in cache, but not flushed to main memory yet
+	* To load into cache, make room - evict from L1d into L2, or L2 into L3 (progressively slower SRAM)
+	* Exclusive caches - a cache line is ONLY in ONE cache at a time, so eviction requires delete + transfer into higher cache
+	* Inclusive cache - L1d and L2 have complete overlap (L2 is larger) such that eviction from L1d is fast!
+	* CPU can flush dirt cache lines to main memory when activity on the memory bus is low
+	* Clean copies of a cache line can exist in multiple processors at once, but WRITES get tricky!!
+	* "Cache coherency" is important in SMP systems - detecting a dirty cache line in one processor when another wants to read / write needs to occur
+		* Think: main memory is out of date, but another processor wants to perform an instruction. Cache coherency protocols!
+	* Once a dirty cache line is transferred to a new processor, it must be evicted from the originating processor
+		* MORAL: dirty cache lines can ONLY be in one cache at a time! Clean stuff is fine to be everywhere.
+	* Biggest protocol is MESI which will be talked on later.
+	* The numbers for cache misses look substantial: registers = 1 cycle, L1d = 3, L2 = 14, memory = 240
+	* Some of these costs can be masked by starting operations early, or by allowing for "shadow" registers which basically sound like futures
+	* A graph of working set vs cycles/operations (logarithmic scale in paper) show "plateaus" for filled L1d, L2 cache - substantial!
+
+	3.3 CPU Cache Implementation Details
+	* Fully associative cache - every location can map to any main memory cache line, so the CPU has to search every cache line in cache for a matching tag! This requires lots of transistors to do well, so full associativity is only good for really small caches.
+	* Direct associative - each memory location maps to one and only one cache location
+		* Problem: memory hotspots? Some cache locations stay super hot and others are barely used at all?
+	* Set associative - any memory location can map to one of N cache locations (8-way associativity - one memory -> one of 8 cache spots)
+		* Find right set block than compare tag to only 8 cache lines!
+	* Set associativity improves cache hit/miss ratios and is cheaper than a direct associative caching method.
+		* Nowadays, L1 cahce uses 8-way, L2 uses 24
+	* Let's test different kinds of access patterns to see how caching and associativity can help?! Next time! My brain is done.
+
+	Single Threaded Sequential Access
+
+	Single Threaded Random Access
+
+
