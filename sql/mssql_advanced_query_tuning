@@ -1,0 +1,25 @@
+Advanced Query Tuning Concepts
+
+	* Three joins: Nested loops joins, Merge joins, Hash joins
+	* Nested loop joins are good for big table -> very small (dim tables!)
+	* Merge join is good for two big sorted tables joined on indexed columns
+		* If unsorted, sort + merge <-> hash join
+	* If two input sizes are different / large, unsorted, unindexed sets, do a hash join!
+
+	HASH JOINS
+	* Build input and probe input - build is smaller (lookup?), probe is bigger (determined by query optimizer)
+	* In-Memory Hash Join - hash the build input into a hash table, then scan RBAR the probe input and hash / bucket, and match
+	* Grace Hash Join - Same thing, but partitioned because build input doesn't fit in memory
+	* SQL Server starts in-memory, and will slowly transition to Grace Hash / Recursive hash if needed
+	* If the query optimizer guesses which is build and which is probe incorrectly, it can switch at runtime (role reversal)
+
+	NESTED LOOP JOIN
+	* Essentially two nested loops - one for the outer, smaller table, and for each row of the outer, a loop on the inner, large table
+	* Index nested loop joins take advantage of indexes on the inner table
+	* This feels like shitty cursors
+
+	MERGE JOIN
+	* Good on preindexed / presorted tables (all keys in ON clause are indexed / sorted)
+	* Can seek right two rows to compare
+	* Sometimes might put a sort in front of a merge join if query optimizer thinks it's good
+	

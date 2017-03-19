@@ -21,7 +21,7 @@ What Every Programmer Should Know About Memory
 		* Every read / write will slightly discharge capacitance, ie "leakage" - DRAM cells must be refreshed!
 		* Charging / discharging is NOT instantaneous, which means the sense amplifier needs to estimate when (dis)charging is finished (physics!)
 		* Advantage is real estate - data line, access line, one transistor, and capacitor (10^9 per chip!)
-	* Static would be great, but the costs are too high, so for commodity hardware were kinda stuck with dynamic.
+	* Static would be great, but the costs are too high, so for commodity hardware we're kinda stuck with dynamic.
 
 	2.1.3 DRAM access
 	* processor virtual address 
@@ -68,7 +68,7 @@ What Every Programmer Should Know About Memory
 	2.2.4 Memory Types
 	* Driving up the frequency of the RAM modules / cells themselves is expensive (power reqs.), but we can make some optimizations
 	* Address 2 - 8 cells with the same address, buffer their contents together, and then up the frequency on the FSB instead of the SDRAM itself
-	* This is what DDR1 and DDR@ essentially do - DDR3 adds optimizations for lowering voltage costs
+	* This is what DDR1 and DDR2 essentially do - DDR3 adds optimizations for lowering voltage costs
 	* FB-DRAM uses serialization to get around scalability issues of DDR RAM - gotta re-read this
 	* Even with the fastest memory, a wasted memory cycle probably scales to (for example) 11 wasted CPU cycles, so being efficient is key
 	* Network, video, and storage components will pipe into memory via DMA too, which can hog bandwidth and waste even more CPU cycles.
@@ -97,7 +97,7 @@ What Every Programmer Should Know About Memory
 	* To load into cache, make room - evict from L1d into L2, or L2 into L3 (progressively slower SRAM)
 	* Exclusive caches - a cache line is ONLY in ONE cache at a time, so eviction requires delete + transfer into higher cache
 	* Inclusive cache - L1d and L2 have complete overlap (L2 is larger) such that eviction from L1d is fast!
-	* CPU can flush dirt cache lines to main memory when activity on the memory bus is low
+	* CPU can flush dirty cache lines to main memory when activity on the memory bus is low
 	* Clean copies of a cache line can exist in multiple processors at once, but WRITES get tricky!!
 	* "Cache coherency" is important in SMP systems - detecting a dirty cache line in one processor when another wants to read / write needs to occur
 		* Think: main memory is out of date, but another processor wants to perform an instruction. Cache coherency protocols!
@@ -115,10 +115,20 @@ What Every Programmer Should Know About Memory
 	* Set associative - any memory location can map to one of N cache locations (8-way associativity - one memory -> one of 8 cache spots)
 		* Find right set block than compare tag to only 8 cache lines!
 	* Set associativity improves cache hit/miss ratios and is cheaper than a direct associative caching method.
-		* Nowadays, L1 cahce uses 8-way, L2 uses 24
-	* Let's test different kinds of access patterns to see how caching and associativity can help?! Next time! My brain is done.
+		* Nowadays, L1 cache uses 8-way, L2 uses 24
+	* Let's test different kinds of access patterns to see how caching and associativity can help?!
 
 	Single Threaded Sequential Access
+	* Cache size matters for prefetching. Based on data access pattern assumptions, the CPU will prefetch data into cache lines ahead of time
+	* This prefetching is only effective for small element sizes - large element sizes that take whole cache lines, less so
+		** Don't understand this part
+	* Also impactful is TLB cache (caches the translations of virtual addresses to physical ones)
+		* For small element sizes, TLB cache can be used over more elements - large, fewer
+		* Translation is very costly!
+	* Typical pattern - as working set grows, entirety can be held in increasingly distant caches - this incurs latency costs
+		* Latency costs GREATLY improved by prefetching!
+		* Real bad for different element sizes - prefetching can't go across page bounds (why?), so large elements are tough
+
 
 	Single Threaded Random Access
 
